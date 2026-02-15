@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RUN OR DIE | Road Tracker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- HTML2Canvas for Screenshots -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #05070A;
+            /* Deeper Midnight Black */
+        }
+
+        #map {
+            height: calc(100vh - 40px);
+            width: 100%;
+            border-radius: 1.5rem;
+            z-index: 1;
+            background: #05070A;
+        }
+
+        /* Dark Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #1a365d;
+            border-radius: 10px;
+        }
+
+        .glass-panel {
+            background: rgba(13, 17, 23, 0.9);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 198, 255, 0.1);
+        }
+
+        .strava-blue {
+            color: #00C6FF;
+        }
+
+        .bg-strava-blue {
+            background-color: #00C6FF;
+        }
+
+        .bg-strava-blue:hover {
+            background-color: #00E0FF;
+        }
+
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #0d1117;
+            z-index: 2000;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.8);
+            max-height: 250px;
+            overflow-y: auto;
+            margin-top: 0.5rem;
+            border: 1px solid rgba(0, 198, 255, 0.2);
+        }
+
+        .search-item {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .search-item:hover {
+            background-color: #1a202c;
+            color: #00C6FF;
+        }
+
+        /* Strava Map Controls */
+        .leaflet-bar {
+            border: none !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+        }
+
+        .leaflet-bar a {
+            background-color: #0d1117 !important;
+            color: #fff !important;
+            border: 1px solid #1a202c !important;
+        }
+
+        .leaflet-bar a:hover {
+            background-color: #00C6FF !important;
+            color: #000 !important;
+        }
+
+        /* Markers */
+        .strava-dot {
+            background-color: white;
+            border: 3px solid #00C6FF;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            box-shadow: 0 0 15px rgba(0, 198, 255, 0.8);
+        }
+
+        .user-dot {
+            background-color: #00C6FF;
+            border: 3px solid white;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(0, 198, 255, 1);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(0, 198, 255, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(0, 198, 255, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(0, 198, 255, 0);
+            }
+        }
+
+        /* Run Dashboard */
+        .run-dashboard {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 3000;
+            width: 90%;
+            max-width: 600px;
+            background: rgba(13, 17, 23, 0.95);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(0, 198, 255, 0.3);
+            border-radius: 20px;
+            padding: 15px;
+            display: none;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(5, 7, 10, 0.9);
+            z-index: 5000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+
+<body class="p-5 h-screen overflow-hidden text-slate-100">
+
+    <div class="flex h-full gap-6">
+        <!-- Dashboard Sidebar -->
+        <aside class="w-80 flex flex-col gap-5 h-full overflow-y-auto pr-2 shrink-0">
+            <!-- Branding -->
+            <div class="flex items-center gap-3 px-2">
+                <div class="bg-strava-blue p-2.5 rounded-xl shadow-lg shadow-blue-900/40">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="black" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                            d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066l-2.084 4.116zM10.257 0L0 20.29h5.151l5.106-10.113 5.106 10.113H20.51L10.257 0z" />
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-black tracking-tighter text-white uppercase italic">RUN <span
+                        class="text-[#00C6FF]">OR DIE</span></h1>
+            </div>
+
+            <!-- Run Control Panel (New) -->
+            <div id="setup-panel" class="glass-panel p-5 rounded-3xl shadow-xl space-y-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Run Setup</h2>
+                    <span
+                        class="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.8)]"></span>
+                </div>
+
+                <button id="locate-btn"
+                    class="w-full py-3 bg-[#1a202c] hover:bg-[#2d3748] text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 border border-white/5">
+                    <svg class="w-4 h-4 text-[#00C6FF]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    LOCATE ME
+                </button>
+
+                <button id="start-run-btn"
+                    class="w-full py-4 bg-[#00C6FF] hover:bg-[#00E0FF] text-black text-sm font-black rounded-xl transition-all shadow-lg hover:shadow-[#00C6FF]/30 uppercase tracking-widest transform hover:-translate-y-1">
+                    Start Run
+                </button>
+            </div>
+
+            <!-- Search Section (Hidden during run) -->
+            <div id="search-panel" class="glass-panel p-5 rounded-3xl shadow-xl transition-opacity duration-300">
+                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Target
+                    Destination</label>
+                <div class="relative">
+                    <input type="text" id="search-input" placeholder="Search route point..."
+                        class="w-full pl-10 pr-4 py-3 bg-[#05070A] border border-white/5 rounded-xl focus:ring-1 focus:ring-[#00C6FF] text-sm transition-all text-white placeholder:text-slate-600">
+                    <svg class="absolute left-3 top-3.5 h-4 w-4 text-slate-500" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <div id="search-results" class="search-results hidden"></div>
+                </div>
+            </div>
+
+            <!-- Stats Section -->
+            <div class="glass-panel p-6 rounded-3xl shadow-xl border-l-4 border-l-[#00C6FF]">
+                <div class="mb-6">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">Planned
+                        Distance</label>
+                    <div class="flex items-baseline gap-1">
+                        <span id="total-distance"
+                            class="text-5xl font-black text-white italic tracking-tighter">0.00</span>
+                        <span class="text-lg font-bold text-blue-500 uppercase italic">km</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-[#05070A] p-4 rounded-2xl border border-white/5">
+                        <p class="text-[9px] font-bold text-slate-500 uppercase mb-1">Waypoints</p>
+                        <p id="point-count" class="text-xl font-bold text-white">0</p>
+                    </div>
+                    <div class="bg-[#05070A] p-4 rounded-2xl border border-white/5">
+                        <p class="text-[9px] font-bold text-slate-500 uppercase mb-1">Status</p>
+                        <p id="run-status" class="text-xl font-bold text-white group-hover:text-[#00C6FF]">IDLE</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History & Controls -->
+            <div id="edit-controls" class="glass-panel p-5 rounded-3xl shadow-xl">
+                <div class="flex gap-2 mb-4">
+                    <button id="undo-btn"
+                        class="flex-1 py-3 bg-[#1a202c] hover:bg-[#2d3748] text-white text-xs font-bold rounded-xl transition-all disabled:opacity-20"
+                        disabled>UNDO</button>
+                    <button id="redo-btn"
+                        class="flex-1 py-3 bg-[#1a202c] hover:bg-[#2d3748] text-white text-xs font-bold rounded-xl transition-all disabled:opacity-20"
+                        disabled>REDO</button>
+                </div>
+                <button id="clear-btn"
+                    class="w-full py-3 bg-blue-900/10 hover:bg-blue-900/30 text-blue-400 text-xs font-black rounded-xl transition-all tracking-widest uppercase border border-blue-500/20">Reset
+                    Route</button>
+            </div>
+        </aside>
+
+        <!-- Main Map Area -->
+        <main class="flex-1 relative">
+            <!-- Loading Indicator -->
+            <div id="loading-indicator" class="absolute top-8 left-1/2 -translate-x-1/2 z-[2000] hidden">
+                <div class="bg-[#00C6FF] text-black px-6 py-2 rounded-full shadow-2xl flex items-center gap-3">
+                    <div class="animate-spin h-3 w-3 border-2 border-black border-t-transparent rounded-full"></div>
+                    <span class="text-xs font-black tracking-widest uppercase">Calculating...</span>
+                </div>
+            </div>
+
+            <!-- Off Route Warning -->
+            <div id="off-route-warning" class="absolute top-20 left-1/2 -translate-x-1/2 z-[2000] hidden">
+                <div
+                    class="bg-red-600 text-white px-8 py-3 rounded-xl shadow-2xl flex items-center gap-3 border border-red-400">
+                    <svg class="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div class="flex flex-col items-center">
+                        <span class="text-sm font-black tracking-widest uppercase">OFF ROUTE!</span>
+                        <span class="text-[10px] opacity-90">Return to the blue line</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Run Dashboard Overlay -->
+            <div id="active-run-dashboard" class="run-dashboard flex flex-col gap-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-xs font-bold text-[#00C6FF] uppercase tracking-widest">Live Run</h3>
+                    <div id="run-timer" class="text-xl font-mono text-white font-bold">00:00:00</div>
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <div class="text-[9px] text-slate-400 uppercase font-bold">Distance</div>
+                        <div class="text-2xl font-black text-white italic"><span id="run-distance">0.00</span> <span
+                                class="text-xs text-slate-500 not-italic">km</span></div>
+                    </div>
+                    <div>
+                        <div class="text-[9px] text-slate-400 uppercase font-bold">Pace</div>
+                        <div class="text-2xl font-black text-white italic"><span id="run-pace">--'--"</span> <span
+                                class="text-xs text-slate-500 not-italic">/km</span></div>
+                    </div>
+                    <div>
+                        <div class="text-[9px] text-slate-400 uppercase font-bold">Calories</div>
+                        <div class="text-2xl font-black text-white italic"><span id="run-calories">0</span> <span
+                                class="text-xs text-slate-500 not-italic">cal</span></div>
+                    </div>
+                </div>
+                <button id="end-run-btn"
+                    class="w-full py-3 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl uppercase tracking-widest transition-colors shadow-lg">End
+                    Run</button>
+            </div>
+
+            <div id="map"></div>
+
+            <!-- Map Layer Toggle -->
+            <div class="absolute bottom-10 right-10 z-[1000] flex gap-2">
+                <button onclick="changeLayer('strava')"
+                    class="bg-strava-blue px-5 py-2.5 rounded-xl text-[10px] font-black shadow-2xl hover:scale-105 transition-all text-black uppercase tracking-widest">Strava
+                    Blue</button>
+                <button onclick="changeLayer('hybrid')"
+                    class="glass-panel px-5 py-2.5 rounded-xl text-[10px] font-black shadow-2xl hover:scale-105 transition-all text-white uppercase tracking-widest">Satellite</button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Summary Modal -->
+    <div id="summary-modal" class="modal-overlay">
+        <div class="bg-[#0d1117] w-full max-w-md rounded-3xl p-6 border border-white/10 shadow-2xl m-4 relative">
+            <h2 class="text-2xl font-black text-white italic uppercase mb-2">Run <span
+                    class="text-[#00C6FF]">Complete</span></h2>
+            <div id="share-card" class="bg-[#05070A] rounded-2xl overflow-hidden border border-white/5 mb-6 relative">
+                <!-- Map functionality will be cloned here or a static image used for the screenshot -->
+                <div class="p-6">
+                    <div class="flex justify-between items-baseline mb-4">
+                        <div class="text-3xl font-black text-white italic" id="summary-distance">5.20 <span
+                                class="text-sm not-italic opacity-50">km</span></div>
+                        <div class="text-xl font-mono text-[#00C6FF]" id="summary-time">00:32:15</div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <div class="text-[10px] text-slate-500 uppercase">Avg Pace</div>
+                            <div class="text-lg font-bold text-white" id="summary-pace">5'12" /km</div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] text-slate-500 uppercase">Calories</div>
+                            <div class="text-lg font-bold text-white" id="summary-calories">450</div>
+                        </div>
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-white/5 flex gap-2 items-center">
+                        <div class="bg-strava-blue p-1.5 rounded-lg">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="black">
+                                <path
+                                    d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066l-2.084 4.116zM10.257 0L0 20.29h5.151l5.106-10.113 5.106 10.113H20.51L10.257 0z" />
+                            </svg>
+                        </div>
+                        <span class="text-[10px] font-bold tracking-widest uppercase">Run or Die</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-3">
+                <button onclick="closeModal()"
+                    class="flex-1 py-3 bg-[#1a202c] text-white text-xs font-bold rounded-xl uppercase tracking-widest">Close</button>
+                <button id="download-summary-btn"
+                    class="flex-1 py-3 bg-[#00C6FF] text-black text-xs font-black rounded-xl uppercase tracking-widest shadow-lg shadow-blue-500/20">Save
+                    Image</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // --- MAP SETUP ---
+        const map = L.map('map', { zoomControl: true, attributionControl: false }).setView([31.7917, -7.0926], 6);
+        const layers = {
+            strava: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'),
+            hybrid: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}')
+        };
+        layers.strava.addTo(map);
+
+        function changeLayer(type) { Object.values(layers).forEach(l => map.removeLayer(l)); layers[type].addTo(map); }
+
+        // --- STATE & DATA ---
+        let markers = []; // Planned route markers
+        let history = [];
+        let historyIndex = -1;
+
+        // Run State
+        let isRunning = false;
+        let userPathCoords = [];
+        let startTime = null;
+        let timerInterval = null;
+        let userMarker = null;
+        let watchId = null;
+
+        // --- UI ELEMENTS ---
+        const distanceDisplay = document.getElementById('total-distance');
+        const pointCount = document.getElementById('point-count');
+        const runStatus = document.getElementById('run-status');
+        const activeDashboard = document.getElementById('active-run-dashboard');
+        const setupPanel = document.getElementById('setup-panel');
+        const searchPanel = document.getElementById('search-panel');
+        const editControls = document.getElementById('edit-controls');
+
+        // --- POLYLINES ---
+        // 1. Planned Route (Blue)
+        let roadPolyline = L.polyline([], { color: '#00C6FF', weight: 6, opacity: 0.5, lineJoin: 'round', className: 'planned-route' }).addTo(map);
+
+        // 2. Traveled Route (Bright White/Pink/Green during run?) Let's go with Hot Pink for contrast
+        let traveledPolyline = L.polyline([], { color: '#FF0055', weight: 6, opacity: 1, lineJoin: 'round', className: 'traveled-route' }).addTo(map);
+
+        // --- CORE FUNCTIONS (Legacy + New) ---
+
+        function saveState() {
+            const state = markers.map(m => m.getLatLng());
+            if (historyIndex < history.length - 1) history = history.slice(0, historyIndex + 1);
+            history.push(state);
+            historyIndex++;
+            updateHistoryButtons();
+        }
+
+        function loadState(index) {
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+            if (history[index]) {
+                history[index].forEach(latlng => markers.push(createMarkerObject(latlng)));
+            }
+            fetchRoadRoute();
+            updateHistoryButtons();
+        }
+
+        function updateHistoryButtons() {
+            document.getElementById('undo-btn').disabled = historyIndex <= 0;
+            document.getElementById('redo-btn').disabled = historyIndex >= history.length - 1;
+        }
+
+        async function fetchRoadRoute() {
+            pointCount.innerText = markers.length;
+            if (markers.length < 2) {
+                roadPolyline.setLatLngs([]);
+                distanceDisplay.innerText = "0.00";
+                return;
+            }
+
+            document.getElementById('loading-indicator').style.display = 'block';
+            const coords = markers.map(m => `${m.getLatLng().lng},${m.getLatLng().lat}`).join(';');
+            const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                if (data.code === 'Ok') {
+                    const route = data.routes[0];
+                    const latlngs = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                    roadPolyline.setLatLngs(latlngs); // Update planned path
+                    distanceDisplay.innerText = (route.distance / 1000).toFixed(2);
+                }
+            } catch (err) { console.error(err); }
+            finally { document.getElementById('loading-indicator').style.display = 'none'; }
+        }
+
+        function createMarkerObject(latlng) {
+            if (isRunning) return null; // No new markers during run
+            const marker = L.marker(latlng, {
+                draggable: true,
+                icon: L.divIcon({ className: 'custom-div-icon', html: `<div class="strava-dot"></div>`, iconSize: [12, 12], iconAnchor: [6, 6] })
+            }).addTo(map);
+
+            marker.on('dragend', () => { saveState(); fetchRoadRoute(); });
+            marker.on('contextmenu', (e) => {
+                L.DomEvent.stopPropagation(e);
+                map.removeLayer(marker);
+                markers = markers.filter(m => m !== marker);
+                saveState();
+                fetchRoadRoute();
+            });
+            return marker;
+        }
+
+        map.on('click', (e) => {
+            if (isRunning) return; // Prevent editing during run
+            markers.push(createMarkerObject(e.latlng));
+            saveState();
+            fetchRoadRoute();
+        });
+
+        // --- GPS & RUN LOGIC ---
+
+        document.getElementById('locate-btn').addEventListener('click', () => {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    const { latitude, longitude } = position.coords;
+                    const latlng = [latitude, longitude];
+                    map.setView(latlng, 15);
+                    if (!userMarker) {
+                        userMarker = L.marker(latlng, {
+                            icon: L.divIcon({ className: 'u-marker', html: `<div class="user-dot"></div>`, iconSize: [16, 16], iconAnchor: [8, 8] })
+                        }).addTo(map);
+                    } else {
+                        userMarker.setLatLng(latlng);
+                    }
+                }, error => alert("Error getting location: " + error.message));
+            } else { alert("Geolocation is not supported by this browser."); }
+        });
+
+        document.getElementById('start-run-btn').addEventListener('click', startRun);
+        document.getElementById('end-run-btn').addEventListener('click', endRun);
+
+        function startRun() {
+            if (markers.length < 2) { alert("Please plan a route first!"); return; }
+
+            isRunning = true;
+            runStatus.innerText = "RUNNING";
+            runStatus.classList.add('text-[#00C6FF]');
+
+            // UI Transition
+            setupPanel.classList.add('opacity-50', 'pointer-events-none');
+            searchPanel.classList.add('opacity-0', 'pointer-events-none');
+            editControls.classList.add('opacity-50', 'pointer-events-none');
+            activeDashboard.style.display = 'flex';
+
+            // Init Run State
+            startTime = Date.now();
+            userPathCoords = [];
+            traveledPolyline.setLatLngs([]);
+
+            // Start Timer
+            timerInterval = setInterval(updateRunStats, 1000);
+
+            // Start Tracking
+            if (navigator.geolocation) {
+                watchId = navigator.geolocation.watchPosition(updateUserPosition,
+                    (err) => console.error(err),
+                    { enableHighAccuracy: true });
+            }
+        }
+
+        function endRun() {
+            isRunning = false;
+            runStatus.innerText = "FINISHED";
+            clearInterval(timerInterval);
+            navigator.geolocation.clearWatch(watchId);
+
+            // UI Transition
+            activeDashboard.style.display = 'none';
+            setupPanel.classList.remove('opacity-50', 'pointer-events-none');
+            searchPanel.classList.remove('opacity-0', 'pointer-events-none');
+            editControls.classList.remove('opacity-50', 'pointer-events-none');
+
+            showSummary();
+        }
+
+        function updateUserPosition(position) {
+            const { latitude, longitude } = position.coords;
+            const latlng = [latitude, longitude];
+
+            // Update Marker
+            if (!userMarker) {
+                userMarker = L.marker(latlng, {
+                    icon: L.divIcon({ className: 'u-marker', html: `<div class="user-dot"></div>`, iconSize: [16, 16], iconAnchor: [8, 8] })
+                }).addTo(map);
+            } else {
+                userMarker.setLatLng(latlng);
+            }
+
+            // Center Map (Optional, maybe keep it loose)
+            // map.panTo(latlng);
+
+            // Add to path
+            userPathCoords.push(latlng);
+            traveledPolyline.setLatLngs(userPathCoords);
+
+            // Check Deviation
+            checkOffRoute(latlng);
+        }
+
+        function updateRunStats() {
+            const now = Date.now();
+            const diff = now - startTime;
+
+            // Format time
+            const hrs = Math.floor(diff / 3600000);
+            const mins = Math.floor((diff % 3600000) / 60000);
+            const secs = Math.floor((diff % 60000) / 1000);
+            document.getElementById('run-timer').innerText =
+                `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+            // Calc Distance (Simple sum of segments)
+            let dist = 0;
+            for (let i = 1; i < userPathCoords.length; i++) {
+                dist += map.distance(userPathCoords[i - 1], userPathCoords[i]);
+            }
+            const distKm = dist / 1000;
+            document.getElementById('run-distance').innerText = distKm.toFixed(2);
+
+            // Calc Pace (min/km)
+            if (distKm > 0.01) {
+                const totalMinutes = diff / 60000;
+                const pace = totalMinutes / distKm;
+                const paceMins = Math.floor(pace);
+                const paceSecs = Math.floor((pace - paceMins) * 60);
+                document.getElementById('run-pace').innerText = `${paceMins}'${paceSecs.toString().padStart(2, '0')}"`;
+            }
+
+            // Calc Calories (Rough est: 1kcal per kg per km -> assume 70kg user -> 70 * distKm)
+            document.getElementById('run-calories').innerText = Math.floor(70 * distKm);
+        }
+
+        function checkOffRoute(userLatlng) {
+            // Simplified: Distance to closest point on planned polyline
+            // Leaflet doesn't have built-in point-to-polyline distance, simplified geometric check using 'turf.js' concept or simple closest segment check
+            // For now, let's just use distance to closest planned marker.
+            // Better: use L.GeometryUtil if available, but let's do a simple iteration.
+
+            if (roadPolyline.getLatLngs().length === 0) return;
+
+            let minDistance = Infinity;
+            const planned = roadPolyline.getLatLngs(); // These are [Let, Lng] objects
+
+            // Check distance to every segment (Project point on segment) - Simplified to Check distance to every vertex for performance in vanilla JS
+            // For high accuracy we need point-to-segment.
+
+            planned.forEach(pt => {
+                const d = map.distance(userLatlng, pt);
+                if (d < minDistance) minDistance = d;
+            });
+
+            const THRESHOLD_METERS = 50;
+            const warningEl = document.getElementById('off-route-warning');
+
+            if (minDistance > THRESHOLD_METERS) {
+                warningEl.style.display = 'flex';
+            } else {
+                warningEl.style.display = 'none';
+            }
+        }
+
+        // --- SUMMARY & SHARE ---
+        function showSummary() {
+            const modal = document.getElementById('summary-modal');
+            modal.style.display = 'flex';
+
+            // Copy stats
+            document.getElementById('summary-distance').innerHTML = document.getElementById('run-distance').innerText + ' <span class="text-sm not-italic opacity-50">km</span>';
+            document.getElementById('summary-time').innerText = document.getElementById('run-timer').innerText;
+            document.getElementById('summary-pace').innerText = document.getElementById('run-pace').innerText + " /km";
+            document.getElementById('summary-calories').innerText = document.getElementById('run-calories').innerText;
+        }
+
+        function closeModal() {
+            document.getElementById('summary-modal').style.display = 'none';
+            // Reset for next run
+            traveledPolyline.setLatLngs([]);
+            document.getElementById('run-distance').innerText = "0.00";
+            document.getElementById('run-timer').innerText = "00:00:00";
+        }
+
+        document.getElementById('download-summary-btn').addEventListener('click', () => {
+            const element = document.getElementById('share-card');
+            html2canvas(element).then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'run-or-die-summary.png';
+                link.href = canvas.toDataURL();
+                link.click();
+            });
+        });
+
+        // Search (Existing logic retained)
+        let debounceTimer;
+        document.getElementById('search-input').addEventListener('input', (e) => {
+            clearTimeout(debounceTimer);
+            const query = e.target.value;
+            if (query.length < 3) { document.getElementById('search-results').classList.add('hidden'); return; }
+            debounceTimer = setTimeout(() => {
+                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&viewbox=-17.1,35.9,1.2,21.3&bounded=1`)
+                    .then(res => res.json())
+                    .then(data => {
+                        const results = document.getElementById('search-results');
+                        results.innerHTML = '';
+                        if (data.length > 0) {
+                            results.classList.remove('hidden');
+                            data.slice(0, 5).forEach(item => {
+                                const div = document.createElement('div');
+                                div.className = 'search-item p-3 cursor-pointer text-xs font-semibold';
+                                div.textContent = item.display_name;
+                                div.onclick = () => {
+                                    map.flyTo([item.lat, item.lon], 14);
+                                    results.classList.add('hidden');
+                                    document.getElementById('search-input').value = item.display_name.split(',')[0];
+                                };
+                                results.appendChild(div);
+                            });
+                        }
+                    });
+            }, 300);
+        });
+
+        // History Listeners
+        document.getElementById('undo-btn').addEventListener('click', () => { if (historyIndex >= 0) { historyIndex--; loadState(historyIndex); } });
+        document.getElementById('redo-btn').addEventListener('click', () => { if (historyIndex < history.length - 1) { historyIndex++; loadState(historyIndex); } });
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            markers.forEach(m => map.removeLayer(m)); markers = []; saveState(); fetchRoadRoute();
+        });
+
+        saveState(); // Init
+    </script>
+</body>
+
+
+</html>
